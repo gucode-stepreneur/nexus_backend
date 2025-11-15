@@ -50,9 +50,11 @@ func main() {
     app := fiber.New()
 
     app.Use(cors.New(cors.Config{
-        AllowOrigins: "http://localhost:3000, https://tobeit.vercel.app/DailyReport",
+        AllowOrigins: "*",
         AllowMethods: "GET,POST,PUT,DELETE",
+        AllowHeaders: "*",
     }))
+    
 
     app.Get("/get_today_worker", func(c *fiber.Ctx) error {
         var workers []Worker
