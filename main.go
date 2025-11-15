@@ -39,7 +39,7 @@ type Scan struct {
     ScanTime     *time.Time `json:"scan_time"`
     ScannedNFCID *string    `json:"scanned_nfc_id"`
     Status       *string    `json:"status"`
-    Equipment    *string    `json:"equip_name"`
+    Equipment    *string    `json:"equipment"`
 }
 
 var DB *gorm.DB
