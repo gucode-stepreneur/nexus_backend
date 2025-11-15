@@ -78,64 +78,58 @@
             var workers []Worker
         
             loc, _ := time.LoadLocation("Asia/Bangkok")
-            today := time.Now().In(loc).Format("2006-01-02")
+            now := time.Now().In(loc)
+            todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+            todayEnd := todayStart.Add(24 * time.Hour)
         
-            // ดึง Worker ทั้งหมด
-            err := DB.Find(&workers).Error
-            if err != nil {
+            // Workers
+            if err := DB.Find(&workers).Error; err != nil {
                 return c.Status(500).JSON(fiber.Map{"error": err.Error()})
             }
         
-            // ดึง Scan ของวันนี้ทั้งหมด
+            // Scans (FAST)
             var scans []Scan
-            err = DB.Where("DATE(scan_date) = ?", today).Find(&scans).Error
+            err := DB.Where("scan_date >= ? AND scan_date < ?", todayStart, todayEnd).Find(&scans).Error
             if err != nil {
                 return c.Status(500).JSON(fiber.Map{"error": err.Error()})
             }
         
-            // Map WorkerID -> Worker pointer
-            workerMap := make(map[int]*Worker)
+            workerMap := map[int]*Worker{}
             for i := range workers {
                 if workers[i].ID != nil {
                     workerMap[*workers[i].ID] = &workers[i]
                 }
             }
         
-        // Loop Scan และ update status + LastestScan (เก่าที่สุด)
-    for _, s := range scans {
-        if s.WorkerID == nil || s.Equipment == nil || s.ScanTime == nil {
-            continue
-        }
-        w, ok := workerMap[*s.WorkerID]
-        if !ok {
-            continue
-        }
-
-        // Update status
-        switch *s.Equipment {
-        case "Hat":
-            trueVal := true
-            w.HatStatus = &trueVal
-        case "Shirt":
-            trueVal := true
-            w.ShirtStatus = &trueVal
-        case "Boot":
-            trueVal := true
-            w.BootStatus = &trueVal
-        case "Glove":
-            trueVal := true
-            w.GloveStatus = &trueVal
-        }
-
-        // Update LastestScan ให้เป็น scan ที่เก่าที่สุด
-        if w.LastestScan == nil || s.ScanTime.Before(*w.LastestScan) {
-            w.LastestScan = s.ScanTime
-        }
-    }
-
+            for _, s := range scans {
+                if s.WorkerID == nil || s.Equipment == nil || s.ScanTime == nil {
+                    continue
+                }
+                w := workerMap[*s.WorkerID]
+                if w == nil {
+                    continue
+                }
+        
+                t := true
+                switch *s.Equipment {
+                case "Hat":
+                    w.HatStatus = &t
+                case "Shirt":
+                    w.ShirtStatus = &t
+                case "Boot":
+                    w.BootStatus = &t
+                case "Glove":
+                    w.GloveStatus = &t
+                }
+        
+                if w.LastestScan == nil || s.ScanTime.Before(*w.LastestScan) {
+                    w.LastestScan = s.ScanTime
+                }
+            }
         
             return c.JSON(workers)
         })
+        
         
 
         app.Get("/get_all_worker", func(c *fiber.Ctx) error {
