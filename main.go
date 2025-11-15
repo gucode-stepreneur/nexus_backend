@@ -95,10 +95,10 @@ func main() {
                 
                 MAX(s.scan_time) as lastest_scan,
                 
-                COALESCE(MAX(CASE WHEN s.equip_name = 'Hat'   THEN 1 ELSE 0 END), 0) = 1 as hat_status,
-                COALESCE(MAX(CASE WHEN s.equip_name = 'Shirt' THEN 1 ELSE 0 END), 0) = 1 as shirt_status,
-                COALESCE(MAX(CASE WHEN s.equip_name = 'Boot'  THEN 1 ELSE 0 END), 0) = 1 as boot_status,
-                COALESCE(MAX(CASE WHEN s.equip_name = 'Glove' THEN 1 ELSE 0 END), 0) = 1 as glove_status
+                COALESCE(MAX(CASE WHEN s.equipment = 'Hat'   THEN 1 ELSE 0 END), 0) = 1 as hat_status,
+                COALESCE(MAX(CASE WHEN s.equipment = 'Shirt' THEN 1 ELSE 0 END), 0) = 1 as shirt_status,
+                COALESCE(MAX(CASE WHEN s.equipment = 'Boot'  THEN 1 ELSE 0 END), 0) = 1 as boot_status,
+                COALESCE(MAX(CASE WHEN s.equipment = 'Glove' THEN 1 ELSE 0 END), 0) = 1 as glove_status
 
             FROM workers w
             LEFT JOIN scans s 
