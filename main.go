@@ -4,7 +4,7 @@ import (
     "time"
     "log"
     "os"
-
+    cors
     "github.com/gofiber/fiber/v2"
     "gorm.io/driver/mysql"
     "gorm.io/gorm"
@@ -48,6 +48,11 @@ func main() {
 
     // Fiber app
     app := fiber.New()
+
+    app.Use(cors.New(cors.Config{
+        AllowOrigins: "http://localhost:3000, https://tobeit.vercel.app/DailyReport",
+        AllowMethods: "GET,POST,PUT,DELETE",
+    }))
 
     app.Get("/get_today_worker", func(c *fiber.Ctx) error {
         var workers []Worker
