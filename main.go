@@ -18,19 +18,19 @@ type Worker struct {
     Position    *string    `json:"position"`
 
     HatID       *string    `json:"hat_id"`
-    HatStatus   *bool      `json:"hat_status" gorm:"default:false"`
+    HatStatus   *bool      `json:"hat_status" gorm:"-"` // Don't save to DB
 
     ShirtID     *string    `json:"shirt_id"`
-    ShirtStatus *bool      `json:"shirt_status" gorm:"default:false"`
+    ShirtStatus *bool      `json:"shirt_status" gorm:"-"` // Don't save to DB
 
     BootID      *string    `json:"boot_id"`
-    BootStatus  *bool      `json:"boot_status" gorm:"default:false"`
+    BootStatus  *bool      `json:"boot_status" gorm:"-"` // Don't save to DB
 
     GloveID     *string    `json:"glove_id"`
-    GloveStatus *bool      `json:"glove_status" gorm:"default:false"`
+    GloveStatus *bool      `json:"glove_status" gorm:"-"` // Don't save to DB
 
     CreatedAt   *time.Time `json:"created_at"`
-    LastestScan *time.Time `json:"lastest_scan" gorm:"index"`
+    LastestScan *time.Time `json:"lastest_scan" gorm:"-"` // Don't save to DB, calculate from scans
 }
 
 type Scan struct {
@@ -48,17 +48,12 @@ var DB *gorm.DB
 func main() {
     // Configure GORM logger to suppress or reduce logs
     gormLogger := logger.Default.LogMode(logger.Error) // Only log errors
-    
-    // If you want to see warnings too, use:
-    // gormLogger := logger.Default.LogMode(logger.Warn)
 
     // Connect DB with optimized settings
     dsn := "root:zTuGFSJnzSDtQQexCsJnakBWFIHUhCbH@tcp(shortline.proxy.rlwy.net:11710)/railway?charset=utf8mb4&parseTime=True&loc=Local"
     db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
         Logger: gormLogger,
-        // Disable automatic ping on startup
         DisableAutomaticPing: false,
-        // Prepare statements for better performance
         PrepareStmt: true,
     })
     if err != nil {
@@ -76,7 +71,6 @@ func main() {
     sqlDB.SetConnMaxLifetime(time.Hour)
 
     // Only run migrations if explicitly enabled
-    // Run with: MIGRATE=true go run main.go
     if os.Getenv("MIGRATE") == "true" {
         log.Println("Running database migrations...")
         if err := DB.AutoMigrate(&Worker{}, &Scan{}); err != nil {
@@ -89,7 +83,6 @@ func main() {
 
     // Fiber app
     app := fiber.New(fiber.Config{
-        // Reduce overhead
         DisableStartupMessage: false,
         ServerHeader:          "",
         AppName:               "Worker Management API",
@@ -122,12 +115,12 @@ func main() {
         todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
         todayEnd := todayStart.Add(24 * time.Hour)
     
-        // Workers - optimize with Select to only fetch needed fields if possible
+        // Get all workers
         if err := DB.Find(&workers).Error; err != nil {
             return c.Status(500).JSON(fiber.Map{"error": err.Error()})
         }
     
-        // Scans with indexed query
+        // Get today's scans
         var scans []Scan
         err := DB.Where("scan_date >= ? AND scan_date < ?", todayStart, todayEnd).
             Find(&scans).Error
@@ -135,36 +128,54 @@ func main() {
             return c.Status(500).JSON(fiber.Map{"error": err.Error()})
         }
     
+        // Create worker map
         workerMap := make(map[int]*Worker, len(workers))
+        f := false
+        t := true
+        
         for i := range workers {
             if workers[i].ID != nil {
+                // Initialize all statuses to false
+                workers[i].HatStatus = &f
+                workers[i].ShirtStatus = &f
+                workers[i].BootStatus = &f
+                workers[i].GloveStatus = &f
+                workers[i].LastestScan = nil
                 workerMap[*workers[i].ID] = &workers[i]
             }
         }
     
-        for _, s := range scans {
-            if s.WorkerID == nil || s.Equipment == nil || s.ScanTime == nil {
+        // Process scans and check if NFC ID matches worker's equipment
+        for _, scan := range scans {
+            if scan.WorkerID == nil || scan.ScannedNFCID == nil || scan.ScanTime == nil {
                 continue
             }
-            w := workerMap[*s.WorkerID]
-            if w == nil {
+            
+            worker := workerMap[*scan.WorkerID]
+            if worker == nil {
                 continue
             }
     
-            t := true
-            switch *s.Equipment {
-            case "Hat":
-                w.HatStatus = &t
-            case "Shirt":
-                w.ShirtStatus = &t
-            case "Boot":
-                w.BootStatus = &t
-            case "Glove":
-                w.GloveStatus = &t
+            // Check if scanned NFC matches worker's equipment IDs
+            if worker.HatID != nil && *scan.ScannedNFCID == *worker.HatID {
+                worker.HatStatus = &t
+            }
+            
+            if worker.ShirtID != nil && *scan.ScannedNFCID == *worker.ShirtID {
+                worker.ShirtStatus = &t
+            }
+            
+            if worker.BootID != nil && *scan.ScannedNFCID == *worker.BootID {
+                worker.BootStatus = &t
+            }
+            
+            if worker.GloveID != nil && *scan.ScannedNFCID == *worker.GloveID {
+                worker.GloveStatus = &t
             }
     
-            if w.LastestScan == nil || s.ScanTime.After(*w.LastestScan) {
-                w.LastestScan = s.ScanTime
+            // Update latest scan time
+            if worker.LastestScan == nil || scan.ScanTime.After(*worker.LastestScan) {
+                worker.LastestScan = scan.ScanTime
             }
         }
     
@@ -183,17 +194,17 @@ func main() {
     })
 
     app.Get("/get_scan", func(c *fiber.Ctx) error {
-        var workers []Worker
+        var scans []Scan
 
         loc, _ := time.LoadLocation("Asia/Bangkok")
         today := time.Now().In(loc).Format("2006-01-02")
 
-        err := DB.Where("DATE(lastest_scan) = ?", today).Find(&workers).Error
+        err := DB.Where("DATE(scan_date) = ?", today).Find(&scans).Error
         if err != nil {
             return c.Status(500).JSON(fiber.Map{"error": err.Error()})
         }
 
-        return c.JSON(workers)
+        return c.JSON(scans)
     })
 
     port := os.Getenv("PORT")
