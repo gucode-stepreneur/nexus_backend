@@ -57,7 +57,9 @@
         DB = db
 
         // Auto migrate
-        DB.AutoMigrate(&Worker{}, &Scan{})
+        if os.Getenv("ENV") != "production" {
+            DB.AutoMigrate(&Worker{}, &Scan{})
+        }
         
 
         // Fiber app
