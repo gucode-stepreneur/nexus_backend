@@ -4,10 +4,10 @@ import (
     "time"
     "log"
     "os"
-    cors
     "github.com/gofiber/fiber/v2"
     "gorm.io/driver/mysql"
     "gorm.io/gorm"
+    "github.com/gofiber/fiber/v2/middleware/cors"
 )
 
 type Worker struct {
